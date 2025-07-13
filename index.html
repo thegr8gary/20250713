@@ -69,10 +69,9 @@
             <div id="expenses-view"></div>
             <div id="savings-view" class="hidden"></div>
         </main>
-
     </div>
     
-    <div class="fixed bottom-0 left-0 right-0 p-4 flex justify-center bg-gradient-to-t from-bg-light dark:from-bg-dark to-transparent pointer-events-none">
+    <div class="fixed bottom-0 left-0 right-0 p-4 flex justify-center bg-gradient-to-t from-white dark:from-gray-800 to-transparent pointer-events-none">
          <button id="add-main-btn" class="w-full max-w-xs btn-accent font-bold py-3 px-4 rounded-full flex items-center justify-center text-lg shadow-lg transform hover:scale-105 transition-transform pointer-events-auto">
             <svg class="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
             <span id="add-main-btn-text">新增支出</span>
@@ -219,7 +218,6 @@
                     <div class="surface p-4 rounded-xl text-center shadow"><h3 class="text-sm text-muted">所選月份總支出</h3><p class="text-2xl font-bold text-red-500">${formatCurrency(total)}</p></div>
                     <div class="surface p-4 rounded-xl text-center shadow"><h3 class="text-sm text-muted">所選月份筆數</h3><p class="text-2xl font-bold">${viewedMonthExpenses.length}</p></div>
                 </div>
-                <div class="mb-6"><button id="gemini-advice-btn" class="w-full btn-accent font-bold py-3 px-4 rounded-lg flex items-center justify-center text-base">✨ 智慧理財建議</button></div>
                 <h2 class="text-xl font-bold mb-2 px-2">所選月份類別總計</h2><div class="surface rounded-xl shadow overflow-hidden mb-6">${categoryTotalsHTML}</div>
                 <div class="flex justify-between items-center mb-2 px-2"><h2 class="text-xl font-bold">消費月曆</h2></div>
                 <div class="surface rounded-xl shadow p-4 mb-6"><div class="flex justify-between items-center mb-4"><button id="prev-month-btn" class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600">&lt;</button><h3 class="font-bold text-lg">${calendarMonthStr}</h3><button id="next-month-btn" class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600">&gt;</button></div><div id="calendar-container">${renderCalendar(state.ui.calendarDate)}</div></div>
@@ -229,13 +227,12 @@
             document.getElementById('export-btn').addEventListener('click', window.app.exportCsv);
             document.getElementById('prev-month-btn').addEventListener('click', () => window.app.changeMonth(-1));
             document.getElementById('next-month-btn').addEventListener('click', () => window.app.changeMonth(1));
-            document.getElementById('gemini-advice-btn').addEventListener('click', window.app.getFinancialAdvice);
         };
 
         const renderSavingsView = () => {
             let goalsHTML = state.goals.length > 0 ? state.goals.map(goal => {
                 const percentage = Math.max(0, Math.min(100, (goal.saved / goal.target) * 100));
-                return `<div class="p-4 border-b border-gray-200 dark:border-gray-600 last:border-b-0"><div class="flex justify-between items-center mb-2"><span class="font-bold text-lg">${goal.name}</span><div class="text-xs space-x-2"><button onclick="window.app.getSavingsPlan('${goal.id}')" class="text-sm font-semibold" style="color: var(--accent);">✨</button><button onclick="window.app.openEditGoalModal('${goal.id}')" class="text-blue-500 hover:text-blue-600">編輯</button><button onclick="window.app.deleteGoal('${goal.id}')" class="text-red-500 hover:text-red-600">刪除</button></div></div><div class="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-4"><div class="h-4 rounded-full" style="width: ${percentage}%; background-color: var(--accent);"></div></div><div class="flex justify-between text-xs mt-1 text-muted"><span>${percentage.toFixed(1)}%</span><span>${formatCurrency(goal.saved)} / ${formatCurrency(goal.target)}</span></div></div>`
+                return `<div class="p-4 border-b border-gray-200 dark:border-gray-600 last:border-b-0"><div class="flex justify-between items-center mb-2"><span class="font-bold text-lg">${goal.name}</span><div class="text-xs space-x-2"><button onclick="window.app.openEditGoalModal('${goal.id}')" class="text-blue-500 hover:text-blue-600">編輯</button><button onclick="window.app.deleteGoal('${goal.id}')" class="text-red-500 hover:text-red-600">刪除</button></div></div><div class="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-4"><div class="h-4 rounded-full" style="width: ${percentage}%; background-color: var(--accent);"></div></div><div class="flex justify-between text-xs mt-1 text-muted"><span>${percentage.toFixed(1)}%</span><span>${formatCurrency(goal.saved)} / ${formatCurrency(goal.target)}</span></div></div>`
             }).join('') : `<p class="text-center text-muted p-8">尚未設定儲蓄目標...</p>`;
             DOM.savingsView.innerHTML = `<h2 class="text-xl font-bold mb-2 px-2">儲蓄目標</h2><div class="surface rounded-xl shadow overflow-hidden">${goalsHTML}</div>`;
         };
@@ -382,71 +379,8 @@
                     element.classList.add('highlight');
                     setTimeout(() => { element.classList.remove('highlight'); }, 2000);
                 }
-            },
-            getFinancialAdvice: async () => {
-                const viewDate = new Date(state.ui.calendarDate);
-                const viewedMonthExpenses = state.expenses.filter(exp => {
-                    const expDate = new Date(exp.date);
-                    return expDate.getFullYear() === viewDate.getFullYear() && expDate.getMonth() === viewDate.getMonth();
-                });
-
-                if (viewedMonthExpenses.length === 0) {
-                    alert('所選月份無消費紀錄，無法提供建議。');
-                    return;
-                }
-
-                const expenseSummary = viewedMonthExpenses.map(e => `${e.category}類別的「${e.name}」花費 ${e.amount}元`).join('；');
-                const prompt = `我是一位記帳應用的使用者，這是我在 ${viewDate.getFullYear()} 年 ${viewDate.getMonth() + 1} 月的消費紀錄清單：${expenseSummary}。請你扮演一位友善且專業的理財教練，根據這份清單，為我提供一些具體、個人化且可行的省錢建議，並分析我可能忽略的消費模式。請用繁體中文回答。`;
-
-                openModal('✨ 智慧理財建議', '<div class="flex justify-center items-center h-32"><div class="loader"></div></div>', null);
-                
-                const advice = await callGeminiAPI(prompt);
-                const modalContentWrapper = document.getElementById('modal-content-wrapper');
-                if (modalContentWrapper) {
-                    modalContentWrapper.innerHTML = `<div class="prose dark:prose-invert max-w-none whitespace-pre-wrap">${advice}</div>`;
-                }
-            },
-            getSavingsPlan: async (goalId) => {
-                const goal = state.goals.find(g => g.id === goalId);
-                if (!goal) return;
-
-                const prompt = `我有一個儲蓄目標，名稱是「${goal.name}」，目標金額是 ${goal.target} 元，目前已存 ${goal.saved} 元。請以一個友善、鼓勵的理財教練口吻，為我提供一些實際可行、步驟簡單的儲蓄技巧或計畫建議，來幫助我達成這個目標。請用繁體中文回答。`;
-                
-                openModal(`✨「${goal.name}」儲蓄計畫`, '<div class="flex justify-center items-center h-32"><div class="loader"></div></div>', null);
-
-                const plan = await callGeminiAPI(prompt);
-                const modalContentWrapper = document.getElementById('modal-content-wrapper');
-                if (modalContentWrapper) {
-                    modalContentWrapper.innerHTML = `<div class="prose dark:prose-invert max-w-none whitespace-pre-wrap">${plan}</div>`;
-                }
             }
         };
-
-        async function callGeminiAPI(prompt) {
-            const apiKey = ""; // Leave empty
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
-            const payload = { contents: [{ parts: [{ text: prompt }] }] };
-
-            try {
-                const response = await fetch(apiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-                if (!response.ok) {
-                    throw new Error(`API request failed with status ${response.status}`);
-                }
-                const result = await response.json();
-                if (result.candidates && result.candidates.length > 0 && result.candidates[0].content && result.candidates[0].content.parts && result.candidates[0].content.parts.length > 0) {
-                    return result.candidates[0].content.parts[0].text;
-                } else {
-                    return "抱歉，無法產生建議，請稍後再試。";
-                }
-            } catch (error) {
-                console.error("Gemini API call failed:", error);
-                return `發生錯誤：${error.message}。請檢查您的網路連線或稍後再試。`;
-            }
-        }
 
         // Initialize App
         loadData();
