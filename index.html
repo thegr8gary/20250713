@@ -5,12 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>個人開銷管理儀表板 v6.0</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- Firebase SDK -->
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
-
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
@@ -40,92 +35,41 @@
         html.dark .view-btn.active { background-color: var(--accent); color: #1f2937; }
         .calendar-grid { grid-template-columns: repeat(7, minmax(0, 1fr)); }
         .highlight { transition: background-color 0.5s ease; background-color: var(--highlight-bg); }
-        .loader {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid var(--accent);
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-        }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body class="transition-colors duration-300">
 
-    <div id="loading-view" class="flex flex-col items-center justify-center min-h-screen">
-        <div class="loader"></div>
-        <p class="text-muted mt-4">載入中...</p>
-    </div>
-
-    <div id="login-view" class="hidden items-center justify-center min-h-screen">
-        <div class="text-center p-8 surface rounded-2xl shadow-lg max-w-sm mx-auto">
-            <h1 class="text-2xl font-bold mb-2">歡迎使用</h1>
-            <p class="text-muted mb-6">雲端個人開銷管理儀表板</p>
-            <button id="login-btn" class="w-full bg-white hover:bg-gray-100 text-gray-800 font-semibold py-2 px-4 border border-gray-300 rounded-lg shadow-sm flex items-center justify-center">
-                <svg class="w-5 h-5 mr-2" viewBox="0 0 48 48"><path fill="#4285F4" d="M24 9.5c3.9 0 6.9 1.5 9.2 3.6l6.9-6.9C35.4 2.1 30.1 0 24 0 14.9 0 7.3 5.4 4.1 13.2l7.8 6C13.8 13.5 18.5 9.5 24 9.5z"></path><path fill="#34A853" d="M46.2 25.4c0-1.7-.2-3.4-.5-5H24v9.3h12.5c-.5 3-2.1 5.6-4.6 7.3l7.5 5.8c4.4-4.1 7.3-10.1 7.3-17.4z"></path><path fill="#FBBC05" d="M19.4 28.7c-1.2-3.6-1.2-7.6 0-11.2l-7.8-6C7.3 17.1 7.3 31 11.6 36.5l7.8-6z"></path><path fill="#EA4335" d="M24 48c6.1 0 11.4-2 15.2-5.4l-7.5-5.8c-2.5 1.7-5.7 2.7-9.7 2.7-5.5 0-10.2-4-11.9-9.3l-7.8 6C7.3 42.6 14.9 48 24 48z"></path><path fill="none" d="M0 0h48v48H0z"></path></svg>
-                使用 Google 帳號登入
-            </button>
-            <p id="login-error" class="text-red-500 text-sm mt-4"></p>
-        </div>
-    </div>
-
-    <div id="app-view" class="hidden">
-        <div class="container mx-auto p-4 max-w-2xl min-h-screen">
-            <header class="text-center pt-4 pb-6 relative">
-                 <div class="absolute top-4 right-0 flex items-center space-x-2">
-                    <button id="theme-toggle" class="p-2 rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent">
-                        <svg id="theme-icon-light" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
-                        <svg id="theme-icon-dark" class="w-6 h-6 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
-                    </button>
-                    <button id="logout-btn" class="text-sm text-muted hover:text-red-500 font-semibold">登出</button>
-                </div>
-                <h1 id="main-title" contenteditable="true" class="text-3xl font-bold px-10">個人開銷管理儀表板</h1>
-                <p id="sub-title" contenteditable="true" class="text-muted mt-2 px-10">追蹤、分析、管理您的財務</p>
-            </header>
-
-            <div class="p-2 mb-6 rounded-full flex items-center justify-center surface shadow-md">
-                <button data-view="expenses" class="view-btn w-1/2 py-2 rounded-full font-semibold transition-all duration-300">花費</button>
-                <button data-view="savings" class="view-btn w-1/2 py-2 rounded-full font-semibold transition-all duration-300">儲蓄</button>
+    <div class="container mx-auto p-4 max-w-2xl min-h-screen">
+        <header class="text-center pt-4 pb-6 relative">
+             <div class="absolute top-4 right-0 flex items-center space-x-2">
+                <button id="theme-toggle" class="p-2 rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent">
+                    <svg id="theme-icon-light" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+                    <svg id="theme-icon-dark" class="w-6 h-6 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
+                </button>
             </div>
+            <h1 id="main-title" contenteditable="true" class="text-3xl font-bold px-10">個人開銷管理儀表板</h1>
+            <p id="sub-title" contenteditable="true" class="text-muted mt-2 px-10">追蹤、分析、管理您的財務</p>
+        </header>
 
-            <main id="app-content" class="pb-24">
-                <div id="expenses-view"></div>
-                <div id="savings-view" class="hidden"></div>
-            </main>
-
-            <button id="fab" class="btn-accent fixed bottom-6 right-6 w-14 h-14 rounded-full flex items-center justify-center shadow-lg transform hover:scale-110 transition-transform">
-                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
-            </button>
+        <div class="p-2 mb-6 rounded-full flex items-center justify-center surface shadow-md">
+            <button data-view="expenses" class="view-btn w-1/2 py-2 rounded-full font-semibold transition-all duration-300">花費</button>
+            <button data-view="savings" class="view-btn w-1/2 py-2 rounded-full font-semibold transition-all duration-300">儲蓄</button>
         </div>
+
+        <main id="app-content" class="pb-24">
+            <div id="expenses-view"></div>
+            <div id="savings-view" class="hidden"></div>
+        </main>
+
+        <button id="fab" class="btn-accent fixed bottom-6 right-6 w-14 h-14 rounded-full flex items-center justify-center shadow-lg transform hover:scale-110 transition-transform">
+            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+        </button>
     </div>
 
     <div id="modal-container"></div>
 
     <script>
     document.addEventListener('DOMContentLoaded', () => {
-        // TODO: 在此貼上您的 Firebase 設定碼
-        const firebaseConfig = {
-          apiKey: "AIzaSyCfFrEBWiyubvcebdIurVbPXorbL-s5Ew4",
-          authDomain: "expense-tracker-d0877.firebaseapp.com",
-          projectId: "expense-tracker-d0877",
-          storageBucket: "expense-tracker-d0877.firebasestorage.app",
-          messagingSenderId: "465746793688",
-          appId: "1:465746793688:web:250faf99964f51518273ad",
-        };
-
-        // --- 以下為應用程式邏輯，通常不需修改 ---
-
-        if (!firebaseConfig.apiKey) {
-            document.body.innerHTML = '<div class="p-8 text-center text-red-500"><h1>Firebase 設定無效</h1><p>請在程式碼中填入您的 firebaseConfig 物件。</p></div>';
-            return;
-        }
-
-        firebase.initializeApp(firebaseConfig);
-        const auth = firebase.auth();
-        const db = firebase.firestore();
-        let userRef = null;
-
         let state = {};
         const defaultState = {
             expenses: [],
@@ -141,12 +85,6 @@
         };
 
         const DOM = {
-            loadingView: document.getElementById('loading-view'),
-            loginView: document.getElementById('login-view'),
-            appView: document.getElementById('app-view'),
-            loginBtn: document.getElementById('login-btn'),
-            logoutBtn: document.getElementById('logout-btn'),
-            loginError: document.getElementById('login-error'),
             themeToggle: document.getElementById('theme-toggle'),
             themeIconLight: document.getElementById('theme-icon-light'),
             themeIconDark: document.getElementById('theme-icon-dark'),
@@ -160,27 +98,20 @@
         };
 
         const formatCurrency = (amount) => new Intl.NumberFormat('zh-TW', { style: 'currency', currency: 'TWD', minimumFractionDigits: 0 }).format(amount);
-        const generateId = () => db.collection('whatever').doc().id;
+        const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2);
 
         const saveData = () => {
-            if (userRef) {
-                userRef.set(state).catch(error => console.error("儲存資料失敗:", error));
-            }
+            localStorage.setItem('financeTrackerDataV6', JSON.stringify(state));
         };
-        const loadData = async () => {
-            if (userRef) {
-                const doc = await userRef.get();
-                if (doc.exists) {
-                    const data = doc.data();
-                    state = { ...defaultState, ...data, ui: { ...defaultState.ui, ...(data.ui || {}) } };
-                     if (!data.categories || data.categories.length === 0) {
-                        state.categories = defaultState.categories;
-                    }
-                } else {
-                    state = defaultState;
-                    saveData();
+        const loadData = () => {
+            const data = JSON.parse(localStorage.getItem('financeTrackerDataV6'));
+            if (data) {
+                state = { ...defaultState, ...data, ui: { ...defaultState.ui, ...(data.ui || {}) } };
+                 if (!data.categories || data.categories.length === 0) {
+                    state.categories = defaultState.categories;
                 }
-                initializeAppUI();
+            } else {
+                state = defaultState;
             }
         };
         
@@ -230,8 +161,10 @@
             let calendarHTML = `<div class="grid calendar-grid text-center font-semibold text-muted text-sm mb-2">${dayNames.map(d => `<div>${d}</div>`).join('')}</div><div class="grid calendar-grid gap-1">`;
             for (let i = 0; i < firstDayOfMonth; i++) calendarHTML += `<div></div>`;
             for (let day = 1; day <= daysInMonth; day++) {
-                const currentDate = new Date(year, month, day);
-                const dateStr = currentDate.toISOString().slice(0, 10);
+                const monthStr = (month + 1).toString().padStart(2, '0');
+                const dayStr = day.toString().padStart(2, '0');
+                const dateStr = `${year}-${monthStr}-${dayStr}`;
+
                 const today = new Date();
                 const isToday = today.getFullYear() === year && today.getMonth() === month && today.getDate() === day;
                 const dailyExpenses = state.expenses.filter(exp => exp.date === dateStr);
@@ -412,49 +345,11 @@
             }
         };
 
-        // AUTHENTICATION
-        const handleAuth = (user) => {
-            DOM.loadingView.classList.add('hidden');
-            if (user) {
-                userRef = db.collection('users').doc(user.uid);
-                DOM.loginView.classList.add('hidden');
-                DOM.appView.classList.remove('hidden');
-                loadData();
-            } else {
-                userRef = null;
-                DOM.loginView.classList.remove('hidden');
-                DOM.appView.classList.add('hidden');
-            }
-        };
+        // Initialize App
+        loadData();
+        initializeAppUI();
 
-        auth.getRedirectResult()
-            .then((result) => {
-                if (result.user) {
-                    handleAuth(result.user);
-                }
-            })
-            .catch((error) => {
-                console.error("登入跳轉時發生錯誤:", error);
-                DOM.loginError.textContent = `登入失敗: ${error.message}`;
-                handleAuth(null);
-            });
-
-        auth.onAuthStateChanged(user => {
-            if (!auth.currentUser) {
-                 handleAuth(user);
-            }
-        });
-
-        DOM.loginBtn.addEventListener('click', () => {
-            const provider = new firebase.auth.GoogleAuthProvider();
-            auth.signInWithRedirect(provider);
-        });
-
-        DOM.logoutBtn.addEventListener('click', () => {
-            auth.signOut().catch(error => console.error("登出失敗:", error));
-        });
-
-        // OTHER EVENT LISTENERS
+        // Event Listeners
         DOM.themeToggle.addEventListener('click', () => { state.ui.theme = state.ui.theme === 'light' ? 'dark' : 'light'; applyTheme(); saveData(); });
         DOM.mainTitleEl.addEventListener('blur', () => { state.ui.mainTitle = DOM.mainTitleEl.textContent; saveData(); });
         DOM.subTitleEl.addEventListener('blur', () => { state.ui.subTitle = DOM.subTitleEl.textContent; saveData(); });
