@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>個人開銷管理儀表板 v6.0</title>
+    <title>個人開銷管理儀表板 v7.4</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -35,6 +35,15 @@
         html.dark .view-btn.active { background-color: var(--accent); color: #1f2937; }
         .calendar-grid { grid-template-columns: repeat(7, minmax(0, 1fr)); }
         .highlight { transition: background-color 0.5s ease; background-color: var(--highlight-bg); }
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid var(--accent);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body class="transition-colors duration-300">
@@ -56,13 +65,17 @@
             <button data-view="savings" class="view-btn w-1/2 py-2 rounded-full font-semibold transition-all duration-300">儲蓄</button>
         </div>
 
-        <main id="app-content" class="pb-24">
+        <main id="app-content" class="pb-32">
             <div id="expenses-view"></div>
             <div id="savings-view" class="hidden"></div>
         </main>
 
-        <button id="fab" class="btn-accent fixed bottom-6 right-6 w-14 h-14 rounded-full flex items-center justify-center shadow-lg transform hover:scale-110 transition-transform">
-            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+    </div>
+    
+    <div class="fixed bottom-0 left-0 right-0 p-4 flex justify-center bg-gradient-to-t from-bg-light dark:from-bg-dark to-transparent pointer-events-none">
+         <button id="add-main-btn" class="w-full max-w-xs btn-accent font-bold py-3 px-4 rounded-full flex items-center justify-center text-lg shadow-lg transform hover:scale-105 transition-transform pointer-events-auto">
+            <svg class="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+            <span id="add-main-btn-text">新增支出</span>
         </button>
     </div>
 
@@ -93,7 +106,8 @@
             viewButtons: document.querySelectorAll('.view-btn'),
             expensesView: document.getElementById('expenses-view'),
             savingsView: document.getElementById('savings-view'),
-            fab: document.getElementById('fab'),
+            addMainBtn: document.getElementById('add-main-btn'),
+            addMainBtnText: document.getElementById('add-main-btn-text'),
             modalContainer: document.getElementById('modal-container'),
         };
 
@@ -101,10 +115,10 @@
         const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2);
 
         const saveData = () => {
-            localStorage.setItem('financeTrackerDataV6', JSON.stringify(state));
+            localStorage.setItem('financeTrackerDataV7', JSON.stringify(state));
         };
         const loadData = () => {
-            const data = JSON.parse(localStorage.getItem('financeTrackerDataV6'));
+            const data = JSON.parse(localStorage.getItem('financeTrackerDataV7'));
             if (data) {
                 state = { ...defaultState, ...data, ui: { ...defaultState.ui, ...(data.ui || {}) } };
                  if (!data.categories || data.categories.length === 0) {
@@ -143,6 +157,7 @@
             DOM.viewButtons.forEach(btn => btn.classList.toggle('active', btn.dataset.view === view));
             DOM.expensesView.classList.toggle('hidden', view !== 'expenses');
             DOM.savingsView.classList.toggle('hidden', view !== 'savings');
+            DOM.addMainBtnText.textContent = view === 'expenses' ? '新增支出' : '新增儲蓄目標';
             renderContentForView(view);
         };
         
@@ -204,6 +219,7 @@
                     <div class="surface p-4 rounded-xl text-center shadow"><h3 class="text-sm text-muted">所選月份總支出</h3><p class="text-2xl font-bold text-red-500">${formatCurrency(total)}</p></div>
                     <div class="surface p-4 rounded-xl text-center shadow"><h3 class="text-sm text-muted">所選月份筆數</h3><p class="text-2xl font-bold">${viewedMonthExpenses.length}</p></div>
                 </div>
+                <div class="mb-6"><button id="gemini-advice-btn" class="w-full btn-accent font-bold py-3 px-4 rounded-lg flex items-center justify-center text-base">✨ 智慧理財建議</button></div>
                 <h2 class="text-xl font-bold mb-2 px-2">所選月份類別總計</h2><div class="surface rounded-xl shadow overflow-hidden mb-6">${categoryTotalsHTML}</div>
                 <div class="flex justify-between items-center mb-2 px-2"><h2 class="text-xl font-bold">消費月曆</h2></div>
                 <div class="surface rounded-xl shadow p-4 mb-6"><div class="flex justify-between items-center mb-4"><button id="prev-month-btn" class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600">&lt;</button><h3 class="font-bold text-lg">${calendarMonthStr}</h3><button id="next-month-btn" class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600">&gt;</button></div><div id="calendar-container">${renderCalendar(state.ui.calendarDate)}</div></div>
@@ -213,18 +229,19 @@
             document.getElementById('export-btn').addEventListener('click', window.app.exportCsv);
             document.getElementById('prev-month-btn').addEventListener('click', () => window.app.changeMonth(-1));
             document.getElementById('next-month-btn').addEventListener('click', () => window.app.changeMonth(1));
+            document.getElementById('gemini-advice-btn').addEventListener('click', window.app.getFinancialAdvice);
         };
 
         const renderSavingsView = () => {
             let goalsHTML = state.goals.length > 0 ? state.goals.map(goal => {
                 const percentage = Math.max(0, Math.min(100, (goal.saved / goal.target) * 100));
-                return `<div class="p-4 border-b border-gray-200 dark:border-gray-600 last:border-b-0"><div class="flex justify-between items-center mb-2"><span class="font-bold text-lg">${goal.name}</span><div class="text-xs space-x-2"><button onclick="window.app.openEditGoalModal('${goal.id}')" class="text-blue-500 hover:text-blue-600">編輯</button><button onclick="window.app.deleteGoal('${goal.id}')" class="text-red-500 hover:text-red-600">刪除</button></div></div><div class="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-4"><div class="h-4 rounded-full" style="width: ${percentage}%; background-color: var(--accent);"></div></div><div class="flex justify-between text-xs mt-1 text-muted"><span>${percentage.toFixed(1)}%</span><span>${formatCurrency(goal.saved)} / ${formatCurrency(goal.target)}</span></div></div>`
+                return `<div class="p-4 border-b border-gray-200 dark:border-gray-600 last:border-b-0"><div class="flex justify-between items-center mb-2"><span class="font-bold text-lg">${goal.name}</span><div class="text-xs space-x-2"><button onclick="window.app.getSavingsPlan('${goal.id}')" class="text-sm font-semibold" style="color: var(--accent);">✨</button><button onclick="window.app.openEditGoalModal('${goal.id}')" class="text-blue-500 hover:text-blue-600">編輯</button><button onclick="window.app.deleteGoal('${goal.id}')" class="text-red-500 hover:text-red-600">刪除</button></div></div><div class="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-4"><div class="h-4 rounded-full" style="width: ${percentage}%; background-color: var(--accent);"></div></div><div class="flex justify-between text-xs mt-1 text-muted"><span>${percentage.toFixed(1)}%</span><span>${formatCurrency(goal.saved)} / ${formatCurrency(goal.target)}</span></div></div>`
             }).join('') : `<p class="text-center text-muted p-8">尚未設定儲蓄目標...</p>`;
             DOM.savingsView.innerHTML = `<h2 class="text-xl font-bold mb-2 px-2">儲蓄目標</h2><div class="surface rounded-xl shadow overflow-hidden">${goalsHTML}</div>`;
         };
         
-        const openModal = (title, contentHTML, onSubmit) => {
-            DOM.modalContainer.innerHTML = `<div id="modal-backdrop" class="fixed inset-0 z-40 modal-backdrop"></div><div id="modal-dialog" class="fixed z-50 bottom-0 left-0 right-0 surface rounded-t-2xl p-6 shadow-lg transform translate-y-full transition-transform duration-300"><h3 class="text-xl font-bold mb-4">${title}</h3><div id="modal-content-wrapper">${contentHTML}</div></div>`;
+        const openModal = (title, contentHTML, onSubmit, onOpened) => {
+            DOM.modalContainer.innerHTML = `<div id="modal-backdrop" class="fixed inset-0 z-40 modal-backdrop"></div><div id="modal-dialog" class="fixed z-50 bottom-0 left-0 right-0 surface rounded-t-2xl p-6 shadow-lg transform translate-y-full transition-transform duration-300 max-h-[80vh] flex flex-col"><h3 class="text-xl font-bold mb-4 flex-shrink-0">${title}</h3><div id="modal-content-wrapper" class="flex-grow overflow-y-auto">${contentHTML}</div></div>`;
             const backdrop = document.getElementById('modal-backdrop');
             const dialog = document.getElementById('modal-dialog');
             const form = dialog.querySelector('form');
@@ -232,6 +249,7 @@
             if (form && onSubmit) { form.onsubmit = (e) => { e.preventDefault(); onSubmit(new FormData(form)); closeModal(dialog, backdrop); }; }
             requestAnimationFrame(() => {
                 dialog.classList.remove('translate-y-full');
+                if (onOpened) onOpened(dialog);
             });
         };
 
@@ -242,8 +260,30 @@
         };
 
         const getExpenseFormHTML = (expense = {}) => {
+            const isNew = !expense.id;
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = (today.getMonth() + 1).toString().padStart(2, '0');
+            const day = today.getDate().toString().padStart(2, '0');
+            const todayStr = `${year}-${month}-${day}`;
+            const dateValue = expense.date || todayStr;
+
             const categoryOptions = state.categories.map(cat => `<option value="${cat}" ${expense.category === cat ? 'selected' : ''}>${cat}</option>`).join('');
-            return `<form id="modal-form"><div class="space-y-4"><input type="hidden" name="id" value="${expense.id || ''}"><div><label class="text-sm text-muted">品項</label><input type="text" name="name" value="${expense.name || ''}" required class="w-full mt-1 p-2 rounded-lg border bg-transparent"></div><div><label class="text-sm text-muted">金額</label><input type="number" name="amount" value="${expense.amount || ''}" min="0" required class="w-full mt-1 p-2 rounded-lg border bg-transparent"></div><div><div class="flex justify-between items-center"><label class="text-sm text-muted">類別</label><button type="button" onclick="window.app.openManageCategoriesModal()" class="text-xs font-semibold" style="color: var(--accent);">管理類別</button></div><select name="category" class="w-full mt-1 p-2 rounded-lg border bg-transparent">${categoryOptions}</select></div><div><label class="text-sm text-muted">日期</label><input type="date" name="date" value="${expense.date || new Date().toISOString().slice(0,10)}" required class="w-full mt-1 p-2 rounded-lg border bg-transparent"></div><div><label class="text-sm text-muted">備註 (選填)</label><textarea name="notes" class="w-full mt-1 p-2 rounded-lg border bg-transparent" rows="2">${expense.notes || ''}</textarea></div></div><div class="mt-6 flex justify-end"><button type="submit" class="btn-accent font-bold py-2 px-6 rounded-lg">儲存</button></div></form>`;
+            
+            const dateDisplayHTML = isNew ? `
+                <div id="date-display" class="flex items-center justify-between mt-1 p-2 rounded-lg">
+                    <span class="text-gray-700 dark:text-gray-200">${todayStr} (今天)</span>
+                    <button type="button" id="change-date-btn" class="text-xs font-semibold" style="color: var(--accent);">修改</button>
+                </div>
+            ` : '';
+
+            return `<form id="modal-form"><div class="space-y-4"><input type="hidden" name="id" value="${expense.id || ''}"><div><label class="text-sm text-muted">品項</label><input type="text" name="name" value="${expense.name || ''}" required class="w-full mt-1 p-2 rounded-lg border bg-transparent"></div><div><label class="text-sm text-muted">金額</label><input type="number" name="amount" value="${expense.amount || ''}" min="0" required class="w-full mt-1 p-2 rounded-lg border bg-transparent"></div><div><div class="flex justify-between items-center"><label class="text-sm text-muted">類別</label><button type="button" onclick="window.app.openManageCategoriesModal()" class="text-xs font-semibold" style="color: var(--accent);">管理類別</button></div><select name="category" class="w-full mt-1 p-2 rounded-lg border bg-transparent">${categoryOptions}</select></div>
+            <div>
+                <label class="text-sm text-muted">日期</label>
+                ${dateDisplayHTML}
+                <input type="date" name="date" value="${dateValue}" required class="w-full mt-1 p-2 rounded-lg border bg-transparent ${isNew ? 'hidden' : ''}">
+            </div>
+            <div><label class="text-sm text-muted">備註 (選填)</label><textarea name="notes" class="w-full mt-1 p-2 rounded-lg border bg-transparent" rows="2">${expense.notes || ''}</textarea></div></div><div class="mt-6 flex justify-end"><button type="submit" class="btn-accent font-bold py-2 px-6 rounded-lg">儲存</button></div></form>`;
         };
         
         const getGoalFormHTML = (goal = {}) => `<form id="modal-form"><div class="space-y-4"><input type="hidden" name="id" value="${goal.id || ''}"><div><label class="text-sm text-muted">目標名稱</label><input type="text" name="name" value="${goal.name || ''}" required class="w-full mt-1 p-2 rounded-lg border bg-transparent"></div><div><label class="text-sm text-muted">目標金額</label><input type="number" name="target" value="${goal.target || ''}" min="0" required class="w-full mt-1 p-2 rounded-lg border bg-transparent"></div><div><label class="text-sm text-muted">目前已存</label><input type="number" name="saved" value="${goal.saved || ''}" min="0" required class="w-full mt-1 p-2 rounded-lg border bg-transparent"></div></div><div class="mt-6 flex justify-end"><button type="submit" class="btn-accent font-bold py-2 px-6 rounded-lg">儲存</button></div></form>`;
@@ -342,8 +382,71 @@
                     element.classList.add('highlight');
                     setTimeout(() => { element.classList.remove('highlight'); }, 2000);
                 }
+            },
+            getFinancialAdvice: async () => {
+                const viewDate = new Date(state.ui.calendarDate);
+                const viewedMonthExpenses = state.expenses.filter(exp => {
+                    const expDate = new Date(exp.date);
+                    return expDate.getFullYear() === viewDate.getFullYear() && expDate.getMonth() === viewDate.getMonth();
+                });
+
+                if (viewedMonthExpenses.length === 0) {
+                    alert('所選月份無消費紀錄，無法提供建議。');
+                    return;
+                }
+
+                const expenseSummary = viewedMonthExpenses.map(e => `${e.category}類別的「${e.name}」花費 ${e.amount}元`).join('；');
+                const prompt = `我是一位記帳應用的使用者，這是我在 ${viewDate.getFullYear()} 年 ${viewDate.getMonth() + 1} 月的消費紀錄清單：${expenseSummary}。請你扮演一位友善且專業的理財教練，根據這份清單，為我提供一些具體、個人化且可行的省錢建議，並分析我可能忽略的消費模式。請用繁體中文回答。`;
+
+                openModal('✨ 智慧理財建議', '<div class="flex justify-center items-center h-32"><div class="loader"></div></div>', null);
+                
+                const advice = await callGeminiAPI(prompt);
+                const modalContentWrapper = document.getElementById('modal-content-wrapper');
+                if (modalContentWrapper) {
+                    modalContentWrapper.innerHTML = `<div class="prose dark:prose-invert max-w-none whitespace-pre-wrap">${advice}</div>`;
+                }
+            },
+            getSavingsPlan: async (goalId) => {
+                const goal = state.goals.find(g => g.id === goalId);
+                if (!goal) return;
+
+                const prompt = `我有一個儲蓄目標，名稱是「${goal.name}」，目標金額是 ${goal.target} 元，目前已存 ${goal.saved} 元。請以一個友善、鼓勵的理財教練口吻，為我提供一些實際可行、步驟簡單的儲蓄技巧或計畫建議，來幫助我達成這個目標。請用繁體中文回答。`;
+                
+                openModal(`✨「${goal.name}」儲蓄計畫`, '<div class="flex justify-center items-center h-32"><div class="loader"></div></div>', null);
+
+                const plan = await callGeminiAPI(prompt);
+                const modalContentWrapper = document.getElementById('modal-content-wrapper');
+                if (modalContentWrapper) {
+                    modalContentWrapper.innerHTML = `<div class="prose dark:prose-invert max-w-none whitespace-pre-wrap">${plan}</div>`;
+                }
             }
         };
+
+        async function callGeminiAPI(prompt) {
+            const apiKey = ""; // Leave empty
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+            const payload = { contents: [{ parts: [{ text: prompt }] }] };
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (!response.ok) {
+                    throw new Error(`API request failed with status ${response.status}`);
+                }
+                const result = await response.json();
+                if (result.candidates && result.candidates.length > 0 && result.candidates[0].content && result.candidates[0].content.parts && result.candidates[0].content.parts.length > 0) {
+                    return result.candidates[0].content.parts[0].text;
+                } else {
+                    return "抱歉，無法產生建議，請稍後再試。";
+                }
+            } catch (error) {
+                console.error("Gemini API call failed:", error);
+                return `發生錯誤：${error.message}。請檢查您的網路連線或稍後再試。`;
+            }
+        }
 
         // Initialize App
         loadData();
@@ -354,13 +457,24 @@
         DOM.mainTitleEl.addEventListener('blur', () => { state.ui.mainTitle = DOM.mainTitleEl.textContent; saveData(); });
         DOM.subTitleEl.addEventListener('blur', () => { state.ui.subTitle = DOM.subTitleEl.textContent; saveData(); });
         DOM.viewButtons.forEach(btn => btn.addEventListener('click', () => switchView(btn.dataset.view)));
-        DOM.fab.addEventListener('click', () => {
+        DOM.addMainBtn.addEventListener('click', () => {
             if (state.ui.activeView === 'expenses') {
                 openModal('新增支出', getExpenseFormHTML(), (formData) => {
                     const newExpense = { id: generateId(), name: formData.get('name'), amount: parseFloat(formData.get('amount')), category: formData.get('category'), date: formData.get('date'), notes: formData.get('notes') };
                     state.expenses.push(newExpense);
                     saveData();
                     renderContentForView('expenses');
+                }, (dialog) => { // onOpened callback
+                    const changeDateBtn = dialog.querySelector('#change-date-btn');
+                    const dateInput = dialog.querySelector('input[name="date"]');
+                    const dateDisplay = dialog.querySelector('#date-display');
+                    if (changeDateBtn) {
+                        changeDateBtn.addEventListener('click', () => {
+                            dateDisplay.classList.add('hidden');
+                            dateInput.classList.remove('hidden');
+                            dateInput.focus();
+                        });
+                    }
                 });
             } else {
                 window.app.openEditGoalModal(null);
