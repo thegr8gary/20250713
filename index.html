@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>個人開銷管理儀表板 v5.9</title>
+    <title>個人開銷管理儀表板 v6.0</title>
     <script src="https://cdn.tailwindcss.com"></script>
     
     <!-- Firebase SDK -->
@@ -40,11 +40,25 @@
         html.dark .view-btn.active { background-color: var(--accent); color: #1f2937; }
         .calendar-grid { grid-template-columns: repeat(7, minmax(0, 1fr)); }
         .highlight { transition: background-color 0.5s ease; background-color: var(--highlight-bg); }
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid var(--accent);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body class="transition-colors duration-300">
 
-    <div id="login-view" class="flex items-center justify-center min-h-screen">
+    <div id="loading-view" class="flex flex-col items-center justify-center min-h-screen">
+        <div class="loader"></div>
+        <p class="text-muted mt-4">載入中...</p>
+    </div>
+
+    <div id="login-view" class="hidden items-center justify-center min-h-screen">
         <div class="text-center p-8 surface rounded-2xl shadow-lg max-w-sm mx-auto">
             <h1 class="text-2xl font-bold mb-2">歡迎使用</h1>
             <p class="text-muted mb-6">雲端個人開銷管理儀表板</p>
@@ -91,15 +105,14 @@
     <script>
     document.addEventListener('DOMContentLoaded', () => {
         // TODO: 在此貼上您的 Firebase 設定碼
-const firebaseConfig = {
-  apiKey: "AIzaSyCfFrEBWiyubvcebdIurVbPXorbL-s5Ew4",
-  authDomain: "expense-tracker-d0877.firebaseapp.com",
-  projectId: "expense-tracker-d0877",
-  storageBucket: "expense-tracker-d0877.firebasestorage.app",
-  messagingSenderId: "465746793688",
-  appId: "1:465746793688:web:250faf99964f51518273ad",
-  measurementId: "G-F0LLCYSSQS"
-};
+        const firebaseConfig = {
+          apiKey: "AIzaSyCfFrEBWiyubvcebdIurVbPXorbL-s5Ew4",
+          authDomain: "expense-tracker-d0877.firebaseapp.com",
+          projectId: "expense-tracker-d0877",
+          storageBucket: "expense-tracker-d0877.firebasestorage.app",
+          messagingSenderId: "465746793688",
+          appId: "1:465746793688:web:250faf99964f51518273ad",
+        };
 
         // --- 以下為應用程式邏輯，通常不需修改 ---
 
@@ -128,6 +141,7 @@ const firebaseConfig = {
         };
 
         const DOM = {
+            loadingView: document.getElementById('loading-view'),
             loginView: document.getElementById('login-view'),
             appView: document.getElementById('app-view'),
             loginBtn: document.getElementById('login-btn'),
@@ -399,27 +413,35 @@ const firebaseConfig = {
         };
 
         // AUTHENTICATION
-        auth.onAuthStateChanged(user => {
+        const handleAuth = (user) => {
+            DOM.loadingView.classList.add('hidden');
             if (user) {
                 userRef = db.collection('users').doc(user.uid);
                 DOM.loginView.classList.add('hidden');
                 DOM.appView.classList.remove('hidden');
                 loadData();
             } else {
-                auth.getRedirectResult()
-                    .then((result) => {
-                        if (result.user) {
-                            // User is signed in.
-                        }
-                    })
-                    .catch((error) => {
-                        console.error("登入跳轉時發生錯誤:", error);
-                        DOM.loginError.textContent = `登入失敗: ${error.message}`;
-                    });
-                
                 userRef = null;
                 DOM.loginView.classList.remove('hidden');
                 DOM.appView.classList.add('hidden');
+            }
+        };
+
+        auth.getRedirectResult()
+            .then((result) => {
+                if (result.user) {
+                    handleAuth(result.user);
+                }
+            })
+            .catch((error) => {
+                console.error("登入跳轉時發生錯誤:", error);
+                DOM.loginError.textContent = `登入失敗: ${error.message}`;
+                handleAuth(null);
+            });
+
+        auth.onAuthStateChanged(user => {
+            if (!auth.currentUser) {
+                 handleAuth(user);
             }
         });
 
