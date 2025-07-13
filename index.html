@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>個人開銷管理儀表板 v5.6</title>
+    <title>個人開銷管理儀表板 v5.7</title>
     <script src="https://cdn.tailwindcss.com"></script>
     
     <!-- Firebase SDK -->
@@ -98,7 +98,6 @@
           messagingSenderId: "465746793688",
           appId: "1:465746793688:web:250faf99964f51518273ad",
         };
-
 
         // --- 以下為應用程式邏輯，通常不需修改 ---
 
@@ -219,7 +218,13 @@
                 const today = new Date();
                 const isToday = today.getFullYear() === year && today.getMonth() === month && today.getDate() === day;
                 const dailyExpenses = state.expenses.filter(exp => exp.date === dateStr);
-                let expensesHTML = dailyExpenses.length > 0 ? `<ul class="mt-1 text-left text-xs space-y-0.5">${dailyExpenses.map(exp => `<li class="truncate cursor-pointer hover:font-bold" onclick="window.app.scrollToExpense('${exp.id}')">${exp.name}</li>`).join('')}</ul>` : '';
+                
+                let expensesHTML = '';
+                if (dailyExpenses.length > 0) {
+                    const dailyTotal = dailyExpenses.reduce((sum, exp) => sum + exp.amount, 0);
+                    expensesHTML = `<div class="mt-2 text-center text-sm font-bold text-red-500">${formatCurrency(dailyTotal)}</div>`;
+                }
+
                 calendarHTML += `<div class="surface p-1.5 rounded-lg min-h-[80px] border ${isToday ? 'border-accent' : 'border-transparent'}"><div class="text-xs ${isToday ? 'font-bold' : 'text-muted'}">${day}</div>${expensesHTML}</div>`;
             }
             calendarHTML += `</div>`;
