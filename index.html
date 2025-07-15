@@ -3,9 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>個人開銷管理儀表板 v7.11</title>
+    <title>個人開銷管理儀表板 v8.0</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
@@ -73,6 +72,7 @@
 
     <script>
     document.addEventListener('DOMContentLoaded', () => {
+        // --- 狀態管理 (State Management) ---
         let state = {};
         const defaultState = {
             expenses: [],
@@ -88,6 +88,7 @@
             }
         };
 
+        // --- DOM 元素快取 ---
         const DOM = {
             themeToggle: document.getElementById('theme-toggle'),
             themeIconLight: document.getElementById('theme-icon-light'),
@@ -102,14 +103,23 @@
             modalContainer: document.getElementById('modal-container'),
         };
 
+        // --- 工具函式 (Utility Functions) ---
         const formatCurrency = (amount) => new Intl.NumberFormat('zh-TW', { style: 'currency', currency: 'TWD', minimumFractionDigits: 0 }).format(amount);
         const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2);
+        const formatDateToYYYYMMDD = (date) => {
+            const d = new Date(date);
+            const year = d.getFullYear();
+            const month = (d.getMonth() + 1).toString().padStart(2, '0');
+            const day = d.getDate().toString().padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        };
 
+        // --- 資料持久化 (Data Persistence) ---
         const saveData = () => {
-            localStorage.setItem('financeTrackerDataV7', JSON.stringify(state));
+            localStorage.setItem('financeTrackerDataV8', JSON.stringify(state));
         };
         const loadData = () => {
-            const data = JSON.parse(localStorage.getItem('financeTrackerDataV7'));
+            const data = JSON.parse(localStorage.getItem('financeTrackerDataV8'));
             if (data) {
                 state = { ...defaultState, ...data, ui: { ...defaultState.ui, ...(data.ui || {}) } };
                  if (!data.categories || data.categories.length === 0) state.categories = defaultState.categories;
@@ -119,6 +129,7 @@
             }
         };
         
+        // --- 初始化與核心渲染邏輯 ---
         const initializeAppUI = () => {
             checkAndProcessRecurringExpenses();
             applyTheme();
@@ -167,12 +178,9 @@
             let calendarHTML = `<div class="grid calendar-grid text-center font-semibold text-muted text-sm mb-2">${dayNames.map(d => `<div>${d}</div>`).join('')}</div><div class="grid calendar-grid gap-1">`;
             for (let i = 0; i < firstDayOfMonth; i++) calendarHTML += `<div></div>`;
             for (let day = 1; day <= daysInMonth; day++) {
-                const monthStr = (month + 1).toString().padStart(2, '0');
-                const dayStr = day.toString().padStart(2, '0');
-                const dateStr = `${year}-${monthStr}-${dayStr}`;
-
+                const dateStr = formatDateToYYYYMMDD(new Date(year, month, day));
                 const today = new Date();
-                const isToday = today.getFullYear() === year && today.getMonth() === month && today.getDate() === day;
+                const isToday = formatDateToYYYYMMDD(today) === dateStr;
                 const dailyExpenses = state.expenses.filter(exp => exp.date === dateStr);
                 
                 let expensesHTML = '';
@@ -250,18 +258,13 @@
 
         const getExpenseFormHTML = (expense = {}) => {
             const isNew = !expense.id;
-            const today = new Date();
-            const year = today.getFullYear();
-            const month = (today.getMonth() + 1).toString().padStart(2, '0');
-            const day = today.getDate().toString().padStart(2, '0');
-            const todayStr = `${year}-${month}-${day}`;
-            const dateValue = expense.date || todayStr;
+            const dateValue = expense.date || formatDateToYYYYMMDD(new Date());
 
             const categoryOptions = state.categories.map(cat => `<option value="${cat}" ${expense.category === cat ? 'selected' : ''}>${cat}</option>`).join('');
             
             const dateDisplayHTML = isNew ? `
                 <div id="date-display" class="flex items-center justify-between mt-1 p-2 rounded-lg">
-                    <span class="text-gray-700 dark:text-gray-200">${todayStr} (今天)</span>
+                    <span class="text-gray-700 dark:text-gray-200">${dateValue} (今天)</span>
                     <button type="button" id="change-date-btn" class="text-xs font-semibold" style="color: var(--accent);">修改</button>
                 </div>
             ` : '';
