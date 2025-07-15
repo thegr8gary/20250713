@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>個人開銷管理儀表板 v7.10</title>
+    <title>個人開銷管理儀表板 v7.11</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -290,7 +290,7 @@
                 <div><label class="text-sm text-muted">金額</label><input type="number" name="amount" value="${item.amount || ''}" min="0" required class="w-full mt-1 p-2 rounded-lg border bg-transparent"></div>
                 <div><label class="text-sm text-muted">類別</label><select name="category" class="w-full mt-1 p-2 rounded-lg border bg-transparent">${categoryOptions}</select></div>
                 <div><label class="text-sm text-muted">每月執行日期 (1-28)</label><input type="number" name="day" value="${item.day || ''}" min="1" max="28" required class="w-full mt-1 p-2 rounded-lg border bg-transparent"></div>
-            </div><div class="mt-6 flex justify-end"><button type="submit" class="btn-accent font-bold py-2 px-6 rounded-lg">儲存</button></div></form>`;
+            </div><div class="mt-6 flex justify-center"><button type="submit" class="w-full max-w-xs btn-accent font-bold py-3 px-4 rounded-full">儲存</button></div></form>`;
         };
 
         const checkAndProcessRecurringExpenses = () => {
@@ -306,7 +306,7 @@
 
                 if (lastProcessedYear !== currentYear || lastProcessedMonth !== currentMonth) {
                     if (today.getDate() >= item.day) {
-                        const dateStr = `${currentYear}-${(currentMonth + 1).toString().padStart(2, '0')}-${item.day.toString().padStart(2, '0')}`;
+                        const dateStr = formatDateToYYYYMMDD(new Date(currentYear, currentMonth, item.day));
                         const newExpense = {
                             id: generateId(),
                             name: item.name,
@@ -398,8 +398,8 @@
                          <button onclick="window.app.openAddRecurringExpenseModal(null)" class="text-sm btn-accent py-1 px-3 rounded-lg font-semibold">⊕ 新增</button>
                     </div>
                     <div class="surface rounded-xl shadow overflow-hidden">${renderList()}</div>
-                    <div class="mt-6 flex justify-end">
-                        <button type="button" onclick="document.getElementById('modal-backdrop').click()" class="font-bold py-2 px-6 rounded-lg bg-gray-200 dark:bg-gray-600">完成</button>
+                    <div class="mt-6 flex justify-center">
+                        <button type="button" onclick="document.getElementById('modal-backdrop').click()" class="w-full max-w-xs btn-accent font-bold py-3 px-4 rounded-full">完成</button>
                     </div>
                 `;
                 openModal('管理週期性支出', contentHTML, null);
