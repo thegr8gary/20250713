@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>個人開銷管理儀表板 v7.12</title>
+    <title>個人開銷管理儀表板 v8.2</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -34,7 +34,13 @@
         html.dark .view-btn { background-color: #4b5563; color: #e5e7eb; }
         html.dark .view-btn.active { background-color: var(--accent); color: #1f2937; }
         .calendar-grid { grid-template-columns: repeat(7, minmax(0, 1fr)); }
-        .highlight { transition: background-color 0.5s ease; background-color: var(--highlight-bg); }
+        .highlight {
+            animation: highlight-anim 2.5s ease-out;
+        }
+        @keyframes highlight-anim {
+            0% { background-color: var(--highlight-bg); }
+            100% { background-color: transparent; }
+        }
     </style>
 </head>
 <body class="transition-colors duration-300">
@@ -113,10 +119,10 @@
         };
 
         const saveData = () => {
-            localStorage.setItem('financeTrackerDataV7', JSON.stringify(state));
+            localStorage.setItem('financeTrackerDataV8', JSON.stringify(state));
         };
         const loadData = () => {
-            const data = JSON.parse(localStorage.getItem('financeTrackerDataV7'));
+            const data = JSON.parse(localStorage.getItem('financeTrackerDataV8'));
             if (data) {
                 state = { ...defaultState, ...data, ui: { ...defaultState.ui, ...(data.ui || {}) } };
                  if (!data.categories || data.categories.length === 0) state.categories = defaultState.categories;
@@ -127,7 +133,7 @@
         };
         
         const initializeAppUI = () => {
-            processRecurringItems(state.recurringExpenses);
+            checkAndProcessRecurringExpenses();
             applyTheme();
             applyUIText();
             switchView('expenses');
@@ -182,7 +188,7 @@
                 let expensesHTML = '';
                 if (dailyExpenses.length > 0) {
                     const dailyTotal = dailyExpenses.reduce((sum, exp) => sum + exp.amount, 0);
-                    expensesHTML = `<div class="mt-2 text-center text-sm font-bold text-red-500">${formatCurrency(dailyTotal)}</div>`;
+                    expensesHTML = `<div class="mt-2 text-center text-sm font-bold text-red-500 cursor-pointer" onclick="window.app.scrollToDate('${dateStr}')">${formatCurrency(dailyTotal)}</div>`;
                 }
 
                 calendarHTML += `<div class="surface p-1.5 rounded-lg min-h-[80px] border ${isToday ? 'border-accent' : 'border-transparent'}"><div class="text-xs ${isToday ? 'font-bold' : 'text-muted'}">${day}</div>${expensesHTML}</div>`;
@@ -206,7 +212,7 @@
             let categoryTotalsHTML = sortedCategoryTotals.length > 0 ? sortedCategoryTotals.map(([category, amount]) => `<div class="flex justify-between items-center py-2 px-4 border-b border-gray-200 dark:border-gray-600 last:border-b-0"><span>${category}</span><span class="font-semibold">${formatCurrency(amount)}</span></div>`).join('') : `<p class="text-center text-muted p-4">所選月份尚無消費</p>`;
             let expenseListHTML = state.expenses.length > 0 ? [...state.expenses].sort((a, b) => new Date(b.date) - new Date(a.date)).map(exp => {
                 const noteHTML = exp.notes ? `<p class="text-xs text-muted italic pl-2">${exp.notes}</p>` : '';
-                return `<div id="expense-${exp.id}" class="flex items-center p-3 border-b border-gray-200 dark:border-gray-600 last:border-b-0"><div class="flex-grow"><p class="font-semibold">${exp.name}</p>${noteHTML}<p class="text-sm text-muted mt-1">${exp.date} · ${exp.category}</p></div><div class="text-right"><p class="font-bold text-lg text-red-500">${formatCurrency(exp.amount)}</p><div class="text-xs space-x-2 mt-1"><button onclick="window.app.openEditExpenseModal('${exp.id}')" class="text-blue-500 hover:text-blue-600">編輯</button><button onclick="window.app.deleteExpense('${exp.id}')" class="text-red-500 hover:text-red-600">刪除</button></div></div></div>`
+                return `<div id="expense-${exp.id}" data-date="${exp.date}" class="flex items-center p-3 border-b border-gray-200 dark:border-gray-600 last:border-b-0"><div class="flex-grow"><p class="font-semibold">${exp.name}</p>${noteHTML}<p class="text-sm text-muted mt-1">${exp.date} · ${exp.category}</p></div><div class="text-right"><p class="font-bold text-lg text-red-500">${formatCurrency(exp.amount)}</p><div class="text-xs space-x-2 mt-1"><button onclick="window.app.openEditExpenseModal('${exp.id}')" class="text-blue-500 hover:text-blue-600">編輯</button><button onclick="window.app.deleteExpense('${exp.id}')" class="text-red-500 hover:text-red-600">刪除</button></div></div></div>`
             }).join('') : `<p class="text-center text-muted p-8">尚未有任何消費紀錄...</p>`;
             const calendarMonthStr = `${viewDate.getFullYear()} 年 ${viewDate.getMonth() + 1} 月`;
             DOM.expensesView.innerHTML = `
@@ -292,52 +298,39 @@
             </div><div class="mt-6 flex justify-center"><button type="submit" class="w-full max-w-xs btn-accent font-bold py-3 px-4 rounded-full">儲存</button></div></form>`;
         };
 
-        const processRecurringItems = (itemsToProcess = []) => {
+        const checkAndProcessRecurringExpenses = () => {
             const today = new Date();
             const currentYear = today.getFullYear();
             const currentMonth = today.getMonth();
             let processed = false;
 
-            itemsToProcess.forEach(item => {
+            state.recurringExpenses.forEach(item => {
                 const lastProcessed = item.lastProcessed ? new Date(item.lastProcessed) : null;
                 const lastProcessedYear = lastProcessed ? lastProcessed.getFullYear() : null;
                 const lastProcessedMonth = lastProcessed ? lastProcessed.getMonth() : null;
-                
-                const existingExpenseIndex = state.expenses.findIndex(exp => exp.recurringId === item.id && new Date(exp.date).getMonth() === currentMonth && new Date(exp.date).getFullYear() === currentYear);
 
-                // Scenario 1: Process for the first time this month
-                if ((!lastProcessed || lastProcessedYear !== currentYear || lastProcessedMonth !== currentMonth) && today.getDate() >= item.day) {
-                    const dateStr = formatDateToYYYYMMDD(new Date(currentYear, currentMonth, item.day));
-                    const newExpense = {
-                        id: generateId(),
-                        recurringId: item.id,
-                        name: item.name,
-                        amount: item.amount,
-                        category: item.category,
-                        date: dateStr,
-                        notes: `週期性支出: ${item.name}`
-                    };
-                    state.expenses.push(newExpense);
-                    item.lastProcessed = new Date().toISOString();
-                    processed = true;
-                } 
-                // Scenario 2: Update an already processed item for this month
-                else if (existingExpenseIndex > -1) {
-                    const existingExpense = state.expenses[existingExpenseIndex];
-                    state.expenses[existingExpenseIndex] = {
-                        ...existingExpense,
-                        name: item.name,
-                        amount: item.amount,
-                        category: item.category,
-                    };
-                    processed = true; 
+                if (lastProcessedYear !== currentYear || lastProcessedMonth !== currentMonth) {
+                    if (today.getDate() >= item.day) {
+                        const dateStr = formatDateToYYYYMMDD(new Date(currentYear, currentMonth, item.day));
+                        const newExpense = {
+                            id: generateId(),
+                            recurringId: item.id,
+                            name: item.name,
+                            amount: item.amount,
+                            category: item.category,
+                            date: dateStr,
+                            notes: `週期性支出: ${item.name}`
+                        };
+                        state.expenses.push(newExpense);
+                        item.lastProcessed = new Date().toISOString();
+                        processed = true;
+                    }
                 }
             });
 
             if (processed) {
                 saveData();
             }
-            return processed;
         };
 
         window.app = {
@@ -500,12 +493,15 @@
                 saveData();
                 renderContentForView('expenses');
             },
-            scrollToExpense: (id) => {
-                const element = document.getElementById(`expense-${id}`);
-                if (element) {
-                    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    element.classList.add('highlight');
-                    setTimeout(() => { element.classList.remove('highlight'); }, 2000);
+            scrollToDate: (date) => {
+                const firstElement = document.querySelector(`[data-date="${date}"]`);
+                if (firstElement) {
+                    firstElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    const allElements = document.querySelectorAll(`[data-date="${date}"]`);
+                    allElements.forEach(el => {
+                        el.classList.add('highlight');
+                        setTimeout(() => el.classList.remove('highlight'), 2500);
+                    });
                 }
             }
         };
