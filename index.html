@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>個人開銷管理儀表板 v8.2</title>
+    <title>個人開銷管理儀表板 v8.0</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -122,18 +122,27 @@
             localStorage.setItem('financeTrackerDataV8', JSON.stringify(state));
         };
         const loadData = () => {
-            const data = JSON.parse(localStorage.getItem('financeTrackerDataV8'));
-            if (data) {
+            let data;
+            try {
+                data = JSON.parse(localStorage.getItem('financeTrackerDataV8'));
+            } catch (error) {
+                console.error("讀取本地資料失敗，將使用預設值:", error);
+                data = null;
+            }
+            
+            if (data && typeof data === 'object') {
                 state = { ...defaultState, ...data, ui: { ...defaultState.ui, ...(data.ui || {}) } };
-                 if (!data.categories || data.categories.length === 0) state.categories = defaultState.categories;
-                 if (!data.recurringExpenses) state.recurringExpenses = [];
+                 if (!Array.isArray(data.categories) || data.categories.length === 0) state.categories = defaultState.categories;
+                 if (!Array.isArray(data.expenses)) state.expenses = defaultState.expenses;
+                 if (!Array.isArray(data.goals)) state.goals = defaultState.goals;
+                 if (!Array.isArray(data.recurringExpenses)) state.recurringExpenses = defaultState.recurringExpenses;
             } else {
                 state = defaultState;
             }
         };
         
         const initializeAppUI = () => {
-            checkAndProcessRecurringExpenses();
+            processRecurringItems();
             applyTheme();
             applyUIText();
             switchView('expenses');
@@ -298,7 +307,7 @@
             </div><div class="mt-6 flex justify-center"><button type="submit" class="w-full max-w-xs btn-accent font-bold py-3 px-4 rounded-full">儲存</button></div></form>`;
         };
 
-        const checkAndProcessRecurringExpenses = () => {
+        const processRecurringItems = () => {
             const today = new Date();
             const currentYear = today.getFullYear();
             const currentMonth = today.getMonth();
@@ -429,12 +438,9 @@
                         state.recurringExpenses.push(newItem);
                     }
                     
-                    const processed = processRecurringItems([newItem]);
+                    processRecurringItems();
                     saveData();
-                    
-                    if (processed) {
-                       renderContentForView('expenses');
-                    }
+                    renderContentForView('expenses');
                     window.app.openManageRecurringExpensesModal();
                 });
             },
@@ -494,10 +500,10 @@
                 renderContentForView('expenses');
             },
             scrollToDate: (date) => {
-                const firstElement = document.querySelector(`[data-date="${date}"]`);
-                if (firstElement) {
+                const allElements = document.querySelectorAll(`[data-date="${date}"]`);
+                if (allElements.length > 0) {
+                    const firstElement = allElements[0];
                     firstElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    const allElements = document.querySelectorAll(`[data-date="${date}"]`);
                     allElements.forEach(el => {
                         el.classList.add('highlight');
                         setTimeout(() => el.classList.remove('highlight'), 2500);
