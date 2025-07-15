@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>個人開銷管理儀表板 v8.0</title>
+    <title>個人開銷管理儀表板 v7.12</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
@@ -72,7 +73,6 @@
 
     <script>
     document.addEventListener('DOMContentLoaded', () => {
-        // --- 狀態管理 (State Management) ---
         let state = {};
         const defaultState = {
             expenses: [],
@@ -88,7 +88,6 @@
             }
         };
 
-        // --- DOM 元素快取 ---
         const DOM = {
             themeToggle: document.getElementById('theme-toggle'),
             themeIconLight: document.getElementById('theme-icon-light'),
@@ -103,7 +102,6 @@
             modalContainer: document.getElementById('modal-container'),
         };
 
-        // --- 工具函式 (Utility Functions) ---
         const formatCurrency = (amount) => new Intl.NumberFormat('zh-TW', { style: 'currency', currency: 'TWD', minimumFractionDigits: 0 }).format(amount);
         const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2);
         const formatDateToYYYYMMDD = (date) => {
@@ -114,12 +112,11 @@
             return `${year}-${month}-${day}`;
         };
 
-        // --- 資料持久化 (Data Persistence) ---
         const saveData = () => {
-            localStorage.setItem('financeTrackerDataV8', JSON.stringify(state));
+            localStorage.setItem('financeTrackerDataV7', JSON.stringify(state));
         };
         const loadData = () => {
-            const data = JSON.parse(localStorage.getItem('financeTrackerDataV8'));
+            const data = JSON.parse(localStorage.getItem('financeTrackerDataV7'));
             if (data) {
                 state = { ...defaultState, ...data, ui: { ...defaultState.ui, ...(data.ui || {}) } };
                  if (!data.categories || data.categories.length === 0) state.categories = defaultState.categories;
@@ -129,9 +126,8 @@
             }
         };
         
-        // --- 初始化與核心渲染邏輯 ---
         const initializeAppUI = () => {
-            checkAndProcessRecurringExpenses();
+            processRecurringItems(state.recurringExpenses);
             applyTheme();
             applyUIText();
             switchView('expenses');
@@ -296,38 +292,52 @@
             </div><div class="mt-6 flex justify-center"><button type="submit" class="w-full max-w-xs btn-accent font-bold py-3 px-4 rounded-full">儲存</button></div></form>`;
         };
 
-        const checkAndProcessRecurringExpenses = () => {
+        const processRecurringItems = (itemsToProcess = []) => {
             const today = new Date();
             const currentYear = today.getFullYear();
             const currentMonth = today.getMonth();
             let processed = false;
 
-            state.recurringExpenses.forEach(item => {
+            itemsToProcess.forEach(item => {
                 const lastProcessed = item.lastProcessed ? new Date(item.lastProcessed) : null;
                 const lastProcessedYear = lastProcessed ? lastProcessed.getFullYear() : null;
                 const lastProcessedMonth = lastProcessed ? lastProcessed.getMonth() : null;
+                
+                const existingExpenseIndex = state.expenses.findIndex(exp => exp.recurringId === item.id && new Date(exp.date).getMonth() === currentMonth && new Date(exp.date).getFullYear() === currentYear);
 
-                if (lastProcessedYear !== currentYear || lastProcessedMonth !== currentMonth) {
-                    if (today.getDate() >= item.day) {
-                        const dateStr = formatDateToYYYYMMDD(new Date(currentYear, currentMonth, item.day));
-                        const newExpense = {
-                            id: generateId(),
-                            name: item.name,
-                            amount: item.amount,
-                            category: item.category,
-                            date: dateStr,
-                            notes: `週期性支出: ${item.name}`
-                        };
-                        state.expenses.push(newExpense);
-                        item.lastProcessed = new Date().toISOString();
-                        processed = true;
-                    }
+                // Scenario 1: Process for the first time this month
+                if ((!lastProcessed || lastProcessedYear !== currentYear || lastProcessedMonth !== currentMonth) && today.getDate() >= item.day) {
+                    const dateStr = formatDateToYYYYMMDD(new Date(currentYear, currentMonth, item.day));
+                    const newExpense = {
+                        id: generateId(),
+                        recurringId: item.id,
+                        name: item.name,
+                        amount: item.amount,
+                        category: item.category,
+                        date: dateStr,
+                        notes: `週期性支出: ${item.name}`
+                    };
+                    state.expenses.push(newExpense);
+                    item.lastProcessed = new Date().toISOString();
+                    processed = true;
+                } 
+                // Scenario 2: Update an already processed item for this month
+                else if (existingExpenseIndex > -1) {
+                    const existingExpense = state.expenses[existingExpenseIndex];
+                    state.expenses[existingExpenseIndex] = {
+                        ...existingExpense,
+                        name: item.name,
+                        amount: item.amount,
+                        category: item.category,
+                    };
+                    processed = true; 
                 }
             });
 
             if (processed) {
                 saveData();
             }
+            return processed;
         };
 
         window.app = {
@@ -425,7 +435,13 @@
                     } else {
                         state.recurringExpenses.push(newItem);
                     }
+                    
+                    const processed = processRecurringItems([newItem]);
                     saveData();
+                    
+                    if (processed) {
+                       renderContentForView('expenses');
+                    }
                     window.app.openManageRecurringExpensesModal();
                 });
             },
