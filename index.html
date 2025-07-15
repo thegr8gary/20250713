@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>個人開銷管理儀表板 v7.6</title>
+    <title>個人開銷管理儀表板 v7.10</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -78,6 +78,7 @@
             expenses: [],
             categories: ['餐飲', '交通', '購物', '娛樂', '居家', '醫療', '其他'],
             goals: [],
+            recurringExpenses: [],
             ui: {
                 activeView: 'expenses',
                 theme: 'light',
@@ -111,15 +112,15 @@
             const data = JSON.parse(localStorage.getItem('financeTrackerDataV7'));
             if (data) {
                 state = { ...defaultState, ...data, ui: { ...defaultState.ui, ...(data.ui || {}) } };
-                 if (!data.categories || data.categories.length === 0) {
-                    state.categories = defaultState.categories;
-                }
+                 if (!data.categories || data.categories.length === 0) state.categories = defaultState.categories;
+                 if (!data.recurringExpenses) state.recurringExpenses = [];
             } else {
                 state = defaultState;
             }
         };
         
         const initializeAppUI = () => {
+            checkAndProcessRecurringExpenses();
             applyTheme();
             applyUIText();
             switchView('expenses');
@@ -198,7 +199,7 @@
                 return acc;
             }, {});
             const sortedCategoryTotals = Object.entries(categoryTotals).sort(([,a],[,b]) => b-a);
-            let categoryTotalsHTML = sortedCategoryTotals.length > 0 ? sortedCategoryTotals.map(([category, amount]) => `<div class="flex justify-between items-center py-2 px-4 border-b border-gray-200 dark:border-gray-600 last:border-b-0"><span>${category}</span><span class="font-semibold">${formatCurrency(amount)}</span></div>`).join('') : `<p class="text-center text-muted p-4">本月尚無消費</p>`;
+            let categoryTotalsHTML = sortedCategoryTotals.length > 0 ? sortedCategoryTotals.map(([category, amount]) => `<div class="flex justify-between items-center py-2 px-4 border-b border-gray-200 dark:border-gray-600 last:border-b-0"><span>${category}</span><span class="font-semibold">${formatCurrency(amount)}</span></div>`).join('') : `<p class="text-center text-muted p-4">所選月份尚無消費</p>`;
             let expenseListHTML = state.expenses.length > 0 ? [...state.expenses].sort((a, b) => new Date(b.date) - new Date(a.date)).map(exp => {
                 const noteHTML = exp.notes ? `<p class="text-xs text-muted italic pl-2">${exp.notes}</p>` : '';
                 return `<div id="expense-${exp.id}" class="flex items-center p-3 border-b border-gray-200 dark:border-gray-600 last:border-b-0"><div class="flex-grow"><p class="font-semibold">${exp.name}</p>${noteHTML}<p class="text-sm text-muted mt-1">${exp.date} · ${exp.category}</p></div><div class="text-right"><p class="font-bold text-lg text-red-500">${formatCurrency(exp.amount)}</p><div class="text-xs space-x-2 mt-1"><button onclick="window.app.openEditExpenseModal('${exp.id}')" class="text-blue-500 hover:text-blue-600">編輯</button><button onclick="window.app.deleteExpense('${exp.id}')" class="text-red-500 hover:text-red-600">刪除</button></div></div></div>`
@@ -206,10 +207,10 @@
             const calendarMonthStr = `${viewDate.getFullYear()} 年 ${viewDate.getMonth() + 1} 月`;
             DOM.expensesView.innerHTML = `
                 <div class="grid grid-cols-2 gap-4 mb-6">
-                    <div class="surface p-4 rounded-xl text-center shadow"><h3 class="text-sm text-muted">本月總支出</h3><p class="text-2xl font-bold text-red-500">${formatCurrency(total)}</p></div>
-                    <div class="surface p-4 rounded-xl text-center shadow"><h3 class="text-sm text-muted">本月筆數</h3><p class="text-2xl font-bold">${viewedMonthExpenses.length}</p></div>
+                    <div class="surface p-4 rounded-xl text-center shadow"><h3 class="text-sm text-muted">所選月份總支出</h3><p class="text-2xl font-bold text-red-500">${formatCurrency(total)}</p></div>
+                    <div class="surface p-4 rounded-xl text-center shadow"><h3 class="text-sm text-muted">所選月份筆數</h3><p class="text-2xl font-bold">${viewedMonthExpenses.length}</p></div>
                 </div>
-                <h2 class="text-xl font-bold mb-2 px-2">本月類別總計</h2><div class="surface rounded-xl shadow overflow-hidden mb-6">${categoryTotalsHTML}</div>
+                <h2 class="text-xl font-bold mb-2 px-2">所選月份類別總計</h2><div class="surface rounded-xl shadow overflow-hidden mb-6">${categoryTotalsHTML}</div>
                 <div class="flex justify-between items-center mb-2 px-2"><h2 class="text-xl font-bold">消費月曆</h2></div>
                 <div class="surface rounded-xl shadow p-4 mb-6"><div class="flex justify-between items-center mb-4"><button id="prev-month-btn" class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600">&lt;</button><h3 class="font-bold text-lg">${calendarMonthStr}</h3><button id="next-month-btn" class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600">&gt;</button></div><div id="calendar-container">${renderCalendar(state.ui.calendarDate)}</div></div>
                 <div class="flex justify-between items-center mb-2 px-2"><h2 class="text-xl font-bold">交易紀錄</h2><button id="export-btn" class="text-sm btn-accent py-1 px-3 rounded-lg font-semibold">匯出 CSV</button></div>
@@ -271,11 +272,61 @@
                 ${dateDisplayHTML}
                 <input type="date" name="date" value="${dateValue}" required class="w-full mt-1 p-2 rounded-lg border bg-transparent ${isNew ? 'hidden' : ''}">
             </div>
-            <div><label class="text-sm text-muted">備註 (選填)</label><textarea name="notes" class="w-full mt-1 p-2 rounded-lg border bg-transparent" rows="2">${expense.notes || ''}</textarea></div></div><div class="mt-6 flex justify-end"><button type="submit" class="btn-accent font-bold py-2 px-6 rounded-lg">儲存</button></div></form>`;
+            <div><label class="text-sm text-muted">備註 (選填)</label><textarea name="notes" class="w-full mt-1 p-2 rounded-lg border bg-transparent" rows="2">${expense.notes || ''}</textarea></div></div>
+            <div class="mt-6 flex flex-col items-center space-y-4">
+                <button type="submit" class="w-full max-w-xs btn-accent font-bold py-3 px-4 rounded-full flex items-center justify-center text-lg">儲存</button>
+                <button type="button" onclick="window.app.switchToRecurringManagement()" class="text-sm font-semibold text-muted hover:text-accent">管理週期性支出</button>
+            </div>
+            </form>`;
         };
         
         const getGoalFormHTML = (goal = {}) => `<form id="modal-form"><div class="space-y-4"><input type="hidden" name="id" value="${goal.id || ''}"><div><label class="text-sm text-muted">目標名稱</label><input type="text" name="name" value="${goal.name || ''}" required class="w-full mt-1 p-2 rounded-lg border bg-transparent"></div><div><label class="text-sm text-muted">目標金額</label><input type="number" name="target" value="${goal.target || ''}" min="0" required class="w-full mt-1 p-2 rounded-lg border bg-transparent"></div><div><label class="text-sm text-muted">目前已存</label><input type="number" name="saved" value="${goal.saved || ''}" min="0" required class="w-full mt-1 p-2 rounded-lg border bg-transparent"></div></div><div class="mt-6 flex justify-end"><button type="submit" class="btn-accent font-bold py-2 px-6 rounded-lg">儲存</button></div></form>`;
         
+        const getRecurringExpenseFormHTML = (item = {}) => {
+            const categoryOptions = state.categories.map(cat => `<option value="${cat}" ${item.category === cat ? 'selected' : ''}>${cat}</option>`).join('');
+            return `<form id="modal-form"><div class="space-y-4">
+                <input type="hidden" name="id" value="${item.id || ''}">
+                <div><label class="text-sm text-muted">品項</label><input type="text" name="name" value="${item.name || ''}" required class="w-full mt-1 p-2 rounded-lg border bg-transparent"></div>
+                <div><label class="text-sm text-muted">金額</label><input type="number" name="amount" value="${item.amount || ''}" min="0" required class="w-full mt-1 p-2 rounded-lg border bg-transparent"></div>
+                <div><label class="text-sm text-muted">類別</label><select name="category" class="w-full mt-1 p-2 rounded-lg border bg-transparent">${categoryOptions}</select></div>
+                <div><label class="text-sm text-muted">每月執行日期 (1-28)</label><input type="number" name="day" value="${item.day || ''}" min="1" max="28" required class="w-full mt-1 p-2 rounded-lg border bg-transparent"></div>
+            </div><div class="mt-6 flex justify-end"><button type="submit" class="btn-accent font-bold py-2 px-6 rounded-lg">儲存</button></div></form>`;
+        };
+
+        const checkAndProcessRecurringExpenses = () => {
+            const today = new Date();
+            const currentYear = today.getFullYear();
+            const currentMonth = today.getMonth();
+            let processed = false;
+
+            state.recurringExpenses.forEach(item => {
+                const lastProcessed = item.lastProcessed ? new Date(item.lastProcessed) : null;
+                const lastProcessedYear = lastProcessed ? lastProcessed.getFullYear() : null;
+                const lastProcessedMonth = lastProcessed ? lastProcessed.getMonth() : null;
+
+                if (lastProcessedYear !== currentYear || lastProcessedMonth !== currentMonth) {
+                    if (today.getDate() >= item.day) {
+                        const dateStr = `${currentYear}-${(currentMonth + 1).toString().padStart(2, '0')}-${item.day.toString().padStart(2, '0')}`;
+                        const newExpense = {
+                            id: generateId(),
+                            name: item.name,
+                            amount: item.amount,
+                            category: item.category,
+                            date: dateStr,
+                            notes: `週期性支出: ${item.name}`
+                        };
+                        state.expenses.push(newExpense);
+                        item.lastProcessed = new Date().toISOString();
+                        processed = true;
+                    }
+                }
+            });
+
+            if (processed) {
+                saveData();
+            }
+        };
+
         window.app = {
             openEditExpenseModal: (id) => {
                 const expense = state.expenses.find(e => e.id === id);
@@ -313,6 +364,73 @@
                     state.goals = state.goals.filter(g => g.id !== id);
                     saveData();
                     renderContentForView('savings');
+                }
+            },
+            switchToRecurringManagement: () => {
+                const dialog = document.getElementById('modal-dialog');
+                const backdrop = document.getElementById('modal-backdrop');
+                if (dialog && backdrop) {
+                    closeModal(dialog, backdrop);
+                    setTimeout(() => {
+                        window.app.openManageRecurringExpensesModal();
+                    }, 350);
+                }
+            },
+            openManageRecurringExpensesModal: () => {
+                const renderList = () => state.recurringExpenses.map(item => `
+                    <div class="flex items-center p-3 border-b border-gray-200 dark:border-gray-600 last:border-b-0">
+                        <div class="flex-grow">
+                            <p class="font-semibold">${item.name}</p>
+                            <p class="text-sm text-muted">每月 ${item.day} 日 · ${item.category}</p>
+                        </div>
+                        <div class="text-right">
+                            <p class="font-bold text-lg text-blue-500">${formatCurrency(item.amount)}</p>
+                            <div class="text-xs space-x-2 mt-1">
+                                <button onclick="window.app.openAddRecurringExpenseModal('${item.id}')" class="text-blue-500 hover:text-blue-600">編輯</button>
+                                <button onclick="window.app.deleteRecurringExpense('${item.id}')" class="text-red-500 hover:text-red-600">刪除</button>
+                            </div>
+                        </div>
+                    </div>`).join('') || `<p class="text-center text-muted p-4">無週期性支出項目</p>`;
+
+                const contentHTML = `
+                    <div class="flex justify-between items-center mb-2">
+                         <h2 class="text-lg font-bold">已設定項目</h2>
+                         <button onclick="window.app.openAddRecurringExpenseModal(null)" class="text-sm btn-accent py-1 px-3 rounded-lg font-semibold">⊕ 新增</button>
+                    </div>
+                    <div class="surface rounded-xl shadow overflow-hidden">${renderList()}</div>
+                    <div class="mt-6 flex justify-end">
+                        <button type="button" onclick="document.getElementById('modal-backdrop').click()" class="font-bold py-2 px-6 rounded-lg bg-gray-200 dark:bg-gray-600">完成</button>
+                    </div>
+                `;
+                openModal('管理週期性支出', contentHTML, null);
+            },
+            openAddRecurringExpenseModal: (id = null) => {
+                const item = id ? state.recurringExpenses.find(i => i.id === id) : {};
+                openModal(id ? '編輯週期性支出' : '新增週期性支出', getRecurringExpenseFormHTML(item), (formData) => {
+                    const recurringId = formData.get('id') || generateId();
+                    const newItem = {
+                        id: recurringId,
+                        name: formData.get('name'),
+                        amount: parseFloat(formData.get('amount')),
+                        category: formData.get('category'),
+                        day: parseInt(formData.get('day')),
+                        lastProcessed: id ? item.lastProcessed : null
+                    };
+                    const index = state.recurringExpenses.findIndex(i => i.id === recurringId);
+                    if (index > -1) {
+                        state.recurringExpenses[index] = newItem;
+                    } else {
+                        state.recurringExpenses.push(newItem);
+                    }
+                    saveData();
+                    window.app.openManageRecurringExpensesModal();
+                });
+            },
+            deleteRecurringExpense: (id) => {
+                if (confirm('確定要刪除這個週期性支出項目嗎？')) {
+                    state.recurringExpenses = state.recurringExpenses.filter(i => i.id !== id);
+                    saveData();
+                    window.app.openManageRecurringExpensesModal();
                 }
             },
             openManageCategoriesModal: () => {
